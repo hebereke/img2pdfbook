@@ -1,8 +1,8 @@
 # img2pdfbook
-Image files to PDF converter
+Image files to single PDF converter
 
 ## usage
-'''
+```
 usage: img2pdfbook.py [-h] [-o FILE] [-d DIR] [-g] [-r] [-s SUFFIX] [-t DIR] [img_folder]
 
 convert Image files to single PDF
@@ -21,4 +21,4 @@ optional arguments:
   -s SUFFIX, --suffix SUFFIX
                         suffix of output file name with recursive mode
   -t DIR, --tmpdir DIR  temporary directory
-  '''
+  ```
