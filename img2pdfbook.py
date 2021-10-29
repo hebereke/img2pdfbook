@@ -2,6 +2,7 @@
 # coding: utf-8
 import os
 import re
+import math
 import argparse
 import tkinter as tk
 import img2pdf
@@ -58,19 +59,19 @@ def output(output_pdf, output_dir, img_folder):
         raise Exception('invalid output folder: {}'.format(out_dir))
     return os.path.join(out_dir, out_file)
 
-def convert(img_folder, output_dir, output_pdf, recursive, suffix, tmpdir):
-    #print(img_folder, output_dir, output_pdf, recursive, suffix)
-    if recursive:
-        img_folders = get_img_folders(img_folder)
+def convert(params):
+    #print(['{}={}, '.format(p, getattr(params, p)) for p in vars(params)]):
+    if params.recursive:
+        img_folders = get_img_folders(params.img_folder)
     else:
-        img_folders = [img_folder]
+        img_folders = [params.img_folder]
     index = 1
     for d in img_folders:
-        imgs = Images(d, tmpdir)
-        output_pdf = output(output_pdf, output_dir, img_folder)
-        if recursive:
+        imgs = Images(d, params)
+        output_pdf = output(params.output_pdf, params.output_dir, params.img_folder)
+        if params.recursive:
             out = os.path.splitext(output_pdf)
-            out_pdf = out[0] + suffix.format(index)
+            out_pdf = out[0] + params.suffix.format(index)
             index += 1
         else:
             out_pdf = output_pdf
@@ -83,35 +84,87 @@ def convert(img_folder, output_dir, output_pdf, recursive, suffix, tmpdir):
                 os.remove(f)
 
 class Images:
-    def __init__(self, folder=None, tmpdir=None):
+    def __init__(self, folder=None, params=None):
         self.folder = os.path.abspath(folder)
         if not os.path.isdir(self.folder):
             raise Exception('invalid folder: {}'.format(self.folder))
-        self.tmpdir = os.path.abspath(tmpdir)
+        self.tmpdir = os.path.abspath(params.tmpdir)
         if not os.path.isdir(self.tmpdir):
             raise Exception('invalid tmpdir: {}'.format(self.tmpdir))
         self.imgs = []
         self.conv_imgs = []
-        self.makelist()
-    def makelist(self):
-        for file in os.scandir(self.folder):
-            if not file.is_file():
-                continue
-            f = os.path.join(self.folder, file.name)
+        self.makelist(params)
+    @staticmethod
+    def str2list(strings, end):
+        list = []
+        for token in strings.split(','):
+            token = token.strip()
+            m1 = re.match('^\d+$', token)
+            m2 = re.match('^(\d+)\-(\d+)$', token)
+            m3 = re.match('^(\d+)\-$', token)
+            if m1:
+                list.append(int(token))
+            elif m2:
+                s = int(m2.group(1))
+                e = int(m2.group(2))
+                if s>e:
+                    raise ValueError('invalid range: {}'.format(token))
+                elif s==e:
+                    list.append(s)
+                else:
+                    list += [i for i in range(s,e+1)]
+            elif m3:
+                list += [i for i in range(int(m3.group(1)),int(end)+1)]
+            else:
+                pass
+        return list
+    def makelist(self, params=None):
+        if params.splitpage is not None:
+            splitpages = self.str2list(params.splitpage)
+        else:
+            splitpages = None
+        files = [file.name for file in os.scandir(self.folder) if file.is_file()]
+        print(files)
+        basename = lambda f: os.path.basename(f)
+        if len(files) > 0:
+            files.sort(key=basename)
+        for i in range(len(files)):
+            f = os.path.join(self.folder, files[i])
             try:
                 img = Image.open(f)
             except:
                 print('skip {} which is not available image'.format(f))
                 continue
-            print(f, img)
-            if img.format != 'JPG':
-                f = os.path.basename(f)
-                f = os.path.splitext(f)[0] + '.jpg'
-                f = os.path.join(self.tmpdir, f)
-                oimg = img.convert('RGB')
-                oimg.save(f, quality=95)
-                self.conv_imgs.append(f)
-            self.imgs.append(f)
+            if splitpages is not None and splitpages.count(i+1) > 0:
+                if img.mode != 'RGB':
+                    img = img.convert('RGB')
+                imgw = img.size[0]
+                imgh = img.size[1]
+                imgw_crop = img.size[0] - params.splitmargin
+                imgw_half = math.floor(img.size[0]/2)
+                img1 = img.crop((params.splitmargin, 0, imgw_half, imgh))
+                img2 = img.crop((imgw_half, 0, imgw_crop, imgh))
+                of = os.path.basename(f)
+                of = os.path.splitext(of)[0]
+                of1 = os.path.join(self.tmpdir, of + '_1.jpg')
+                img1.save(of1, quality=95)
+                self.conv_imgs.append(of1)
+                self.imgs.append(of1)
+                of2 = os.path.join(self.tmpdir, of + '_2.jpg')
+                img2.save(of2, quality=95)
+                self.conv_imgs.append(of2)
+                self.imgs.append(of2)
+            elif img.format != 'JPG':
+                if img.mode != 'RGB':
+                    img = img.convert('RGB')
+                of = os.path.basename(f)
+                of = os.path.splitext(of)[0]
+                of = os.path.join(self.tmpdir, of + '.jpg')
+                img.save(of, quality=95)
+                self.conv_imgs.append(of)
+                self.imgs.append(of)
+            else:
+                self.imgs.append(f)
         basename = lambda f: os.path.basename(f)
         if len(self.imgs) > 0:
             self.imgs.sort(key=basename)
@@ -126,6 +179,11 @@ class Parameters:
         parser.add_argument('-r', '--recursive', help='recursive mode', action='store_true')
         parser.add_argument('-s', '--suffix', help='suffix of output file name with recursive mode', default=' 第{:02d}巻')
         parser.add_argument('-t', '--tmpdir', help='temporary directory', metavar='DIR', default=None)
+        parser.add_argument('--split', help='split image to 2 pages', action='store_true')
+        parser.add_argument('--splitmargin', help='crop margin at left/right side to split image in pixel', default=0)
+        parser.add_argument('--splitpage', help='pages to be split', default=None) # format, '1-, 4-7'
+        #parser.add_argument('--merge', help='merge 2 img into single page', default=0)
+        #parser.add_argument('--mergepage', help='pages to be merged', default=None) # format, '1-, 4-7'
         args = parser.parse_args(initargs)
         for arg in vars(args):
             setattr(self, arg, getattr(args, arg))
@@ -151,84 +209,112 @@ class guiMain(tk.Frame):
     def __init__(self, master=None, params=None):
         super().__init__()
         self.master.title(u'img2pdfbook')
-        self.master.geometry('400x150')
+        self.master.geometry('400x200')
         if params is None:
-            self.p = Parameters()
+            self.params = Parameters()
         else:
-            self.p = params
+            self.params = params
+        self.paramsEntry = {}
         self.create_widgets()
     def create_widgets(self):
-        self.imgfolder_dirdiag = guiDirDiag(master=self, label=u'入力フォルダ', initdir=self.p.img_folder)
-        self.imgfolder_dirdiag.grid(row=0, column=0, columnspan=2)
-        self.outfolder_dirdiag = guiDirDiag(master=self, label=u'出力フォルダ', initdir=self.p.output_dir)
-        self.outfolder_dirdiag.grid(row=1, column=0, columnspan=2)
-        self.outputpdf_textbox = guiTextEntry(master=self, label=u'出力ファイル名', inittext=self.p.output_pdf)
-        self.outputpdf_textbox.grid(row=2, column=0, columnspan=2)
-        self.recursive_check = guiRadioButton(master=self, label=u'入力フォルダ以下の各フォルダで変換', initcond=self.p.recursive)
+        self.imgfolder_dirdiag = guiDirDiag(master=self.master, label=u'入力フォルダ', initdir=self.params.img_folder)
+        self.outfolder_dirdiag = guiDirDiag(master=self.master, label=u'出力フォルダ', initdir=self.params.output_dir)
+        self.outputpdf_textbox = guiTextEntry(master=self.master, label=u'出力ファイル名', inittext=self.params.output_pdf)
+        self.imgfolder_dirdiag.grid(row=0, column=0, columnspan=3)
+        self.outfolder_dirdiag.grid(row=1, column=0, columnspan=3)
+        self.outputpdf_textbox.grid(row=2, column=0, columnspan=3)
+
+        self.suffix_textbox = guiTextEntry(master=self.master, label=u'添字', boxwidth=10, inittext=self.params.suffix)
+        self.suffix_textbox.grid(row=3, column=1, columnspan=2)
+        self.recursive_check = guiRadioButton(master=self.master, label=u'入力フォルダ以下の各フォルダで変換', initcond=self.params.recursive,
+            slave_widgets=[self.suffix_textbox])
         self.recursive_check.grid(row=3, column=0)
-        self.suffix_textbox = guiTextEntry(master=self, label=u'添字', width=10, inittext=self.p.suffix)
-        self.suffix_textbox.grid(row=3, column=1)
-        frame = tk.Frame(master=self.master)
-        frame.grid(row=4, column=0, columnspan=2)
-        button1 = tk.Button(frame, text="実行", command=self.convert)
+
+        self.splitpages_textbox = guiTextEntry(master=self.master, label=u'分割するページ', boxwidth=10, inittext=self.params.splitpage or '')
+        self.splitpages_textbox.grid(row=4, column=1)
+        self.splitmargin_textbox = guiTextEntry(master=self.master, label=u'分割する際の左右マージン', boxwidth=10, inittext=self.params.splitmargin)
+        self.splitmargin_textbox.grid(row=4, column=2)
+        self.split_check = guiRadioButton(master=self.master, label=u'ページを分割', initcond=self.params.split,
+            slave_widgets=[self.splitpages_textbox, self.splitmargin_textbox])
+        self.split_check.grid(row=4, column=0)
+
+        self.frame_bottom = tk.Frame(master=self.master, width=400)
+        button1 = tk.Button(self.frame_bottom, text="実行", command=self.convert)
         button1.grid(row=0,column=0)
-        button2 = tk.Button(frame, text=("閉じる"), command=quit)
+        button2 = tk.Button(self.frame_bottom, text=("閉じる"), command=quit)
         button2.grid(row=0,column=1)
+        self.frame_bottom.grid(row=5, column=0)
+
     def convert(self):
-        convert(self.imgfolder_dirdiag.entry.get(),
-                self.outfolder_dirdiag.entry.get(),
-                self.outputpdf_textbox.entry.get(),
-                self.recursive_check.entry.get(),
-                self.suffix_textbox.entry.get(),
-                self.p.tmpdir)
+        self.params.img_folder = self.imgfolder_dirdiag.entry.get()
+        self.params.output_dir = self.outfolder_dirdiag.entry.get()
+        self.params.output_pdf = self.outputpdf_textbox.entry.get()
+        self.params.recursive = self.recursive_check.entry.get()
+        self.params.suffix = self.suffix_textbox.entry.get()
+        convert(params)
 
 class guiDirDiag(tk.Frame):
-    def __init__(self, master=None, label=None, initdir=None, width=30):
+    def __init__(self, master=None, label=None, initdir=None, width=100, boxwidth=30):
         super().__init__()
         self.label = label
         self.initdir = initdir
+        self.boxwidth = boxwidth
         self.width = width
         self.create_widgets()
     def create_widgets(self):
         self.entry = tk.StringVar()
         self.entry.set(self.initdir)
-        box = tk.Entry(self, textvariable=self.entry, width=self.width)
+        box = tk.Entry(self, textvariable=self.entry, width=self.boxwidth)
         label = tk.Label(self, text=self.label)
         button = tk.Button(self, text=u'フォルダ選択', command=self.dirdialog_clicked)
-        label.pack(side='left', anchor=tk.W)
-        box.pack(side='left')
-        button.pack(side='left')
+        #label.pack(side='left', anchor=tk.W)
+        #box.pack(side='left')
+        #button.pack(side='left')
+        label.grid(row=0, column=0)
+        box.grid(row=0, column=1)
+        button.grid(row=0, column=2)
     def dirdialog_clicked(self):
         initdir = os.path.abspath(os.path.dirname(self.initdir))
         dir = tkf.askdirectory(initialdir = initdir)
         self.entry.set(dir)
 
 class guiTextEntry(tk.Frame):
-    def __init__(self, master=None, label=None, inittext=None, width=30):
+    def __init__(self, master=None, label=None, inittext=None, boxwidth=30):
         super().__init__()
         self.label = label
         self.inittext = inittext
-        self.width = width
+        self.boxwidth = boxwidth
         self.create_widgets()
     def create_widgets(self):
         self.entry = tk.StringVar()
         self.entry.set(self.inittext)
-        box = tk.Entry(self, textvariable=self.entry, width=self.width)
+        box = tk.Entry(self, textvariable=self.entry, width=self.boxwidth)
         label = tk.Label(self, text=self.label)
-        label.pack(side='left', anchor=tk.W)
-        box.pack(side='left')
+        #label.pack(side='left', anchor=tk.W)
+        #box.pack(side='left')
+        label.grid(row=0, column=0)
+        box.grid(row=0, column=1)
 
 class guiRadioButton(tk.Frame):
-    def __init__(self, master=None, label=None, initcond=False):
+    def __init__(self, master=None, label=None, initcond=False, slave_widgets=None):
         super().__init__()
         self.label = label
         self.initcond = initcond
+        self.slave_widgets = slave_widgets
         self.create_widgets()
+        self.interactive()
     def create_widgets(self):
         self.entry = tk.BooleanVar()
         self.entry.set(self.initcond)
-        checkbox = tk.Checkbutton(self, text=self.label, variable=self.entry)
-        checkbox.pack(side='left', anchor=tk.W)
+        checkbox = tk.Checkbutton(self, text=self.label, variable=self.entry, command=self.interactive)
+        #checkbox.pack(side='left', anchor=tk.W)
+        checkbox.grid(row=0, column=0)
+    def interactive(self):
+        for widget in self.slave_widgets:
+            if self.entry.get():
+                widget.grid()
+            else:
+                widget.grid_remove()
 
 if __name__ == '__main__':
     params = Parameters()
@@ -239,9 +325,4 @@ if __name__ == '__main__':
         gui = guiMain(master=root, params=params)
         gui.mainloop()
     else:
-        convert(params.img_folder,
-                params.output_dir,
-                params.output_pdf,
-                params.recursive,
-                params.suffix,
-                params.tmpdir)
+        convert(params)
