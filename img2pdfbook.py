@@ -7,7 +7,7 @@ import tkinter as tk
 import img2pdf
 from PIL import Image
 
-def layout_prop(size='B5', pixel=96):
+class LayoutProp:
     SIZE_MM ={
         'Paperback' : (105, 148),
         'B6' : (128, 182),
@@ -15,13 +15,16 @@ def layout_prop(size='B5', pixel=96):
         'B5' : (182, 257),
         'A4' : (210, 297),
     }
-    try:
-        size = SIZE_MM[size]
-    except KeyError:
-        print('Does not support {}. Use B5 instead of. Support page size are {}'.format(size, ','.join(SIZE_MM.keys())))
-        size = SIZE_MM['B5']
-    pagesize=(img2pdf.mm_to_pt(size[0]), img2pdf.mm_to_pt(size[1]))
-    return img2pdf.get_layout_fun(pagesize)
+    def __init__(self, size='B5', pixel=96):
+        try:
+            self.size = SIZE_MM[size]
+        except KeyError:
+            print('Does not support {}. Use B5 instead of.')
+            print('Support page size are {}'.format(size, ','.join(LayoutProp.SIZE_MM.keys())))
+            size = SIZE_MM['B5']
+    def get_img2pdfFunc(self):
+        pagesize=(img2pdf.mm_to_pt(self.size[0]), img2pdf.mm_to_pt(self.size[1]))
+        return img2pdf.get_layout_fun(pagesize)
 
 def jpg2pdf(imgs, outpdf, size=None):
     with open(outpdf, 'wb') as f:
@@ -29,7 +32,7 @@ def jpg2pdf(imgs, outpdf, size=None):
         if size is None:
             f.write(img2pdf.convert(imgs))
         else:
-            f.write(img2pdf.convert(imgs, layout_fun=layout_prop(size)))
+            f.write(img2pdf.convert(imgs, layout_fun=LayoutProp(size).get_img2pdfFunc()))
 
 def get_img_folders(img_folder_root):
     img_folder_root = os.path.abspath(img_folder_root)
@@ -71,6 +74,7 @@ def convert(img_folder, output_dir, output_pdf, recursive, suffix, tmpdir):
             index += 1
         else:
             out_pdf = output_pdf
+        out_pdf = out_pdf + '.pdf'
         #print(d, imgs.imgs, out_pdf)
         if len(imgs.imgs) > 0:
             jpg2pdf(imgs.imgs, out_pdf)
@@ -116,7 +120,7 @@ class Parameters:
     def __init__(self, initargs=None):
         parser = argparse.ArgumentParser(description='convert Image files to single PDF')
         parser.add_argument('img_folder', help='folder of input images', nargs='?', default='.')
-        parser.add_argument('-o', '--output_pdf', help='output file name', metavar='FILE', default='output.pdf')
+        parser.add_argument('-o', '--output_pdf', help='output file name', metavar='FILE', default='output')
         parser.add_argument('-d', '--output_dir', help='output directory', default=None, metavar='DIR')
         parser.add_argument('-g', '--gui', help='start with GUI', action='store_false')
         parser.add_argument('-r', '--recursive', help='recursive mode', action='store_true')
@@ -227,7 +231,7 @@ class guiRadioButton(tk.Frame):
         checkbox.pack(side='left', anchor=tk.W)
 
 if __name__ == '__main__':
-    params = Parameters(['--help'])
+    params = Parameters()
     if params.gui:
         import tkinter as tk
         import tkinter.filedialog as tkf
