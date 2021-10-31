@@ -5,6 +5,7 @@ import re
 import math
 import argparse
 import tkinter as tk
+import tkinter.filedialog as tkf
 import img2pdf
 from PIL import Image
 
@@ -76,7 +77,7 @@ def convert(params):
         else:
             out_pdf = output_pdf
         out_pdf = out_pdf + '.pdf'
-        #print(d, imgs.imgs, out_pdf)
+        print(d, imgs.imgs, out_pdf)
         if len(imgs.imgs) > 0:
             jpg2pdf(imgs.imgs, out_pdf)
         if len(imgs.conv_imgs) > 0:
@@ -279,9 +280,10 @@ class guiDirDiag(tk.Frame):
         box.pack(side=tk.LEFT)
         button.pack(side=tk.LEFT)
     def dirdialog_clicked(self):
-        initdir = os.path.abspath(os.path.dirname(self.initdir))
+        initdir = os.path.abspath(os.path.dirname(self.entry.get()))
         dir = tkf.askdirectory(initialdir = initdir)
-        self.entry.set(dir)
+        if dir is not None:
+            self.entry.set(dir)
 
 class guiTextEntry(tk.Frame):
     def __init__(self, master=None, label=None, inittext=None, boxwidth=30):
@@ -326,8 +328,6 @@ if __name__ == '__main__':
     if params.nogui:
         convert(params)
     else:
-        import tkinter as tk
-        import tkinter.filedialog as tkf
         root = tk.Tk()
         gui = guiMain(master=root, params=params)
         gui.mainloop()
