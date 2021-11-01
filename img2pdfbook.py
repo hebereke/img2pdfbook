@@ -169,7 +169,7 @@ class Images:
             else:
                 self.imgs.append(f)
         if len(self.imgs) > 0:
-            self.imgs.sort(key=lambda f: int(re.match('[^\d]*(\d+)[^\d]*', os.path.basename(f)).group(1))
+            self.imgs.sort(key=lambda f: int(re.match('[^\d]*(\d+)[^\d]*', os.path.basename(f)).group(1)))
 
 class Parameters:
     def __init__(self, initargs=None):
