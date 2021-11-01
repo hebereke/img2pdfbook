@@ -42,7 +42,7 @@ def get_img_folders(img_folder_root):
         raise Exception('invalid img_folder: {}'.format(img_folder_root))
     # input images
     img_folders = [os.path.join(img_folder_root, d.name) for d in os.scandir(img_folder_root) if d.is_dir()]
-    img_folders.sort(key=lambda x: int(re.match('[^\d]*(\d+)[^\d]*',x).group(0)))
+    img_folders.sort(key=lambda x: int(re.match('[^\d]*(\d+)[^\d]*',x).group(1)))
     return img_folders
 
 def output(output_pdf, output_dir, img_folder):
@@ -168,11 +168,8 @@ class Images:
                 self.imgs.append(of)
             else:
                 self.imgs.append(f)
-        #basename = lambda f: os.path.basename(f)
-        #(key=lambda x: re.match('[^\d]*(\d+)[^\d]*',x).group(0))
-        basename = lambda f: int(re.match('[^\d]*(\d+)[^\d]*', os.path.basename(f)).group(0))
         if len(self.imgs) > 0:
-            self.imgs.sort(key=basename)
+            self.imgs.sort(key=lambda f: int(re.match('[^\d]*(\d+)[^\d]*', os.path.basename(f)).group(1))
 
 class Parameters:
     def __init__(self, initargs=None):
