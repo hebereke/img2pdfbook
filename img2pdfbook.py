@@ -42,7 +42,7 @@ def get_img_folders(img_folder_root):
         raise Exception('invalid img_folder: {}'.format(img_folder_root))
     # input images
     img_folders = [os.path.join(img_folder_root, d.name) for d in os.scandir(img_folder_root) if d.is_dir()]
-    img_folders.sort()
+    img_folders.sort(key=lambda x: int(re.match('[^\d]*(\d+)[^\d]*',x).group(0)))
     return img_folders
 
 def output(output_pdf, output_dir, img_folder):
@@ -61,7 +61,8 @@ def output(output_pdf, output_dir, img_folder):
     return os.path.join(out_dir, out_file)
 
 def convert(params):
-    #print(['{}={}, '.format(p, getattr(params, p)) for p in vars(params)]):
+    if params.debug:
+        print(['{}={}, '.format(p, getattr(params, p)) for p in vars(params)])
     if params.recursive:
         img_folders = get_img_folders(params.img_folder)
     else:
@@ -77,7 +78,8 @@ def convert(params):
         else:
             out_pdf = output_pdf
         out_pdf = out_pdf + '.pdf'
-        print(d, imgs.imgs, out_pdf)
+        if params.debug:
+            print(d, imgs.imgs, out_pdf)
         if len(imgs.imgs) > 0:
             jpg2pdf(imgs.imgs, out_pdf)
         if len(imgs.conv_imgs) > 0:
@@ -130,6 +132,7 @@ class Images:
             splitpages = None
         for i in range(len(files)):
             f = os.path.join(self.folder, files[i])
+            print(f, os.path.basename(f), re.match('[^\d]*(\d+)[^\d]*', os.path.basename(f)).group(0))
             try:
                 img = Image.open(f)
             except:
@@ -165,7 +168,9 @@ class Images:
                 self.imgs.append(of)
             else:
                 self.imgs.append(f)
-        basename = lambda f: os.path.basename(f)
+        #basename = lambda f: os.path.basename(f)
+        #(key=lambda x: re.match('[^\d]*(\d+)[^\d]*',x).group(0))
+        basename = lambda f: int(re.match('[^\d]*(\d+)[^\d]*', os.path.basename(f)).group(0))
         if len(self.imgs) > 0:
             self.imgs.sort(key=basename)
 
@@ -184,6 +189,7 @@ class Parameters:
         parser.add_argument('--splitpage', help='pages to be split', default=None) # format, '1-, 4-7'
         #parser.add_argument('--merge', help='merge 2 img into single page', default=0)
         #parser.add_argument('--mergepage', help='pages to be merged', default=None) # format, '1-, 4-7'
+        parser.add_argument('--debug', help='debug mode', action='store_true')
         args = parser.parse_args(initargs)
         for arg in vars(args):
             setattr(self, arg, getattr(args, arg))
