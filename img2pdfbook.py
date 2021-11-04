@@ -8,6 +8,7 @@ import tkinter as tk
 import tkinter.filedialog as tkf
 import img2pdf
 from PIL import Image
+import natsort
 
 class LayoutProp:
     SIZE_MM ={
@@ -29,7 +30,6 @@ class LayoutProp:
         return img2pdf.get_layout_fun(pagesize)
 
 def filesortkey(f):
-    print(f)
     return int(re.match('.*[^\d]*(\d+)[^\d]*$', os.path.basename(f)).group(1))
 
 def jpg2pdf(imgs, outpdf, size=None):
@@ -46,7 +46,7 @@ def get_img_folders(img_folder_root):
         raise Exception('invalid img_folder: {}'.format(img_folder_root))
     # input images
     img_folders = [os.path.join(img_folder_root, d.name) for d in os.scandir(img_folder_root) if d.is_dir()]
-    img_folders.sort(key=filesortkey)
+    img_folders = natsort.natsorted(img_folders)
     return img_folders
 
 def output(output_pdf, output_dir, img_folder):
@@ -88,22 +88,26 @@ def convert(params):
             jpg2pdf(imgs.imgs, out_pdf)
         if len(imgs.conv_imgs) > 0:
             for f in imgs.conv_imgs:
-                print(f)
                 os.remove(f)
 
 class Images:
     def __init__(self, folder=None, params=None):
         self.folder = os.path.abspath(folder)
+        self.params = params
         if not os.path.isdir(self.folder):
             raise Exception('invalid folder: {}'.format(self.folder))
-        self.tmpdir = os.path.abspath(params.tmpdir)
+        if self.params.tmpdir is None:
+            self.tmpdir = self.params.output_dir
+        else:
+            self.tmpdir = self.params.tmpdir
+        self.tmpdir = os.path.abspath(self.tmpdir)
         if not os.path.isdir(self.tmpdir):
             raise Exception('invalid tmpdir: {}'.format(self.tmpdir))
         self.imgs = []
         self.conv_imgs = []
-        self.makelist(params)
+        self.makelist()
     @staticmethod
-    def str2list(strings, end):
+    def str2list(strings, max):
         list = []
         for token in strings.split(','):
             token = token.strip()
@@ -122,9 +126,9 @@ class Images:
                 else:
                     list += [i for i in range(s,e+1)]
             elif m3:
-                list += [i for i in range(int(m3.group(1)),int(end)+1)]
+                list += [i for i in range(int(m3.group(1)),int(max)+1)]
             else:
-                pass
+                list = [i for i in range(1,int(max)+1)]
         return list
     @staticmethod
     def check_imgfile(f):
@@ -134,31 +138,27 @@ class Images:
         except:
             print('skip {} which is not available image'.format(f))
             return False
-    def makelist(self, params=None):
-        files = [file.name for file in os.scandir(self.folder) if file.is_file()]
-        basename = lambda f: os.path.basename(f)
+    def makelist(self):
+        files = [file.name for file in os.scandir(self.folder)
+            if file.is_file() and self.check_imgfile(os.path.join(self.folder, file.name))]
         if len(files) > 0:
-            files.sort(key=basename)
-        if params.splitpage is not None:
-            splitpages = self.str2list(params.splitpage, len(files))
+            files = natsort.natsorted(files)
+        if self.params.splitpage is not None:
+            splitpages = self.str2list(self.params.splitpage, len(files))
         else:
             splitpages = None
-        files = [f for f in files if self.check_imgfile(os.path.join(self.folder, f))]
-        print(files)
         for i in range(len(files)):
-            print(i, files[i])
             f = os.path.join(self.folder, files[i])
             img = Image.open(f)
-            print(img.format)
-            if splitpages is not None and splitpages.count(i+1) > 0:
+            if self.params.split and splitpages is not None and splitpages.count(i+1) > 0:
                 if img.mode != 'RGB':
                     img = img.convert('RGB')
                 imgw = float(img.size[0])
                 imgh = float(img.size[1])
-                imgw_crop = imgw - params.splitmargin
+                imgw_crop = imgw - self.params.splitmargin
                 imgw_half = math.floor(imgw/2)
                 img1 = img.crop((imgw_half, 0, imgw_crop, imgh))
-                img2 = img.crop((params.splitmargin, 0, imgw_half, imgh))
+                img2 = img.crop((self.params.splitmargin, 0, imgw_half, imgh))
                 of = os.path.basename(f)
                 of = os.path.splitext(of)[0]
                 of1 = os.path.join(self.tmpdir, of + '_1.jpg')
@@ -169,20 +169,19 @@ class Images:
                 img2.save(of2, quality=95)
                 self.conv_imgs.append(of2)
                 self.imgs.append(of2)
-                print(of1, of2)
-            elif img.format != 'JPG':
+                print('split {} to {} and {}'.format(f, of1, of2))
+            elif img.format != 'JPEG':
                 if img.mode != 'RGB':
                     img = img.convert('RGB')
                 of = os.path.basename(f)
                 of = os.path.splitext(of)[0]
                 of = os.path.join(self.tmpdir, of + '.jpg')
                 img.save(of, quality=95)
+                print('convert {} to {}'.format(f, of))
                 self.conv_imgs.append(of)
                 self.imgs.append(of)
             else:
                 self.imgs.append(f)
-        #if len(self.imgs) > 0:
-        #    self.imgs.sort(key=filesortkey)
 
 class Parameters:
     def __init__(self, initargs=None):
@@ -205,8 +204,6 @@ class Parameters:
             setattr(self, arg, getattr(args, arg))
         if self.output_dir is None:
             self.output_dir = self.img_folder
-        if self.tmpdir is None:
-            self.tmpdir = self.img_folder
     def setOutput(self):
         if os.path.dirname(self.output_pdf) == '':
             out_dir = img_folder
@@ -342,8 +339,6 @@ class guiRadioButton(tk.Frame):
 
 if __name__ == '__main__':
     params = Parameters()
-    for p in vars(params):
-        print(p, type(getattr(params, p)))
     if params.nogui:
         convert(params)
     else:
