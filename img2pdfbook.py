@@ -28,6 +28,10 @@ class LayoutProp:
         pagesize=(img2pdf.mm_to_pt(self.size[0]), img2pdf.mm_to_pt(self.size[1]))
         return img2pdf.get_layout_fun(pagesize)
 
+def filesortkey(f):
+    print(f)
+    return int(re.match('.*[^\d]*(\d+)[^\d]*$', os.path.basename(f)).group(1))
+
 def jpg2pdf(imgs, outpdf, size=None):
     with open(outpdf, 'wb') as f:
         print('output {}'.format(outpdf))
@@ -42,7 +46,7 @@ def get_img_folders(img_folder_root):
         raise Exception('invalid img_folder: {}'.format(img_folder_root))
     # input images
     img_folders = [os.path.join(img_folder_root, d.name) for d in os.scandir(img_folder_root) if d.is_dir()]
-    img_folders.sort(key=lambda x: int(re.match('[^\d]*(\d+)[^\d]*',x).group(1)))
+    img_folders.sort(key=filesortkey)
     return img_folders
 
 def output(output_pdf, output_dir, img_folder):
@@ -84,6 +88,7 @@ def convert(params):
             jpg2pdf(imgs.imgs, out_pdf)
         if len(imgs.conv_imgs) > 0:
             for f in imgs.conv_imgs:
+                print(f)
                 os.remove(f)
 
 class Images:
@@ -121,6 +126,14 @@ class Images:
             else:
                 pass
         return list
+    @staticmethod
+    def check_imgfile(f):
+        try:
+            Image.open(f)
+            return True
+        except:
+            print('skip {} which is not available image'.format(f))
+            return False
     def makelist(self, params=None):
         files = [file.name for file in os.scandir(self.folder) if file.is_file()]
         basename = lambda f: os.path.basename(f)
@@ -130,23 +143,22 @@ class Images:
             splitpages = self.str2list(params.splitpage, len(files))
         else:
             splitpages = None
+        files = [f for f in files if self.check_imgfile(os.path.join(self.folder, f))]
+        print(files)
         for i in range(len(files)):
+            print(i, files[i])
             f = os.path.join(self.folder, files[i])
-            print(f, os.path.basename(f), re.match('[^\d]*(\d+)[^\d]*', os.path.basename(f)).group(0))
-            try:
-                img = Image.open(f)
-            except:
-                print('skip {} which is not available image'.format(f))
-                continue
+            img = Image.open(f)
+            print(img.format)
             if splitpages is not None and splitpages.count(i+1) > 0:
                 if img.mode != 'RGB':
                     img = img.convert('RGB')
-                imgw = img.size[0]
-                imgh = img.size[1]
-                imgw_crop = img.size[0] - params.splitmargin
-                imgw_half = math.floor(img.size[0]/2)
-                img1 = img.crop((params.splitmargin, 0, imgw_half, imgh))
-                img2 = img.crop((imgw_half, 0, imgw_crop, imgh))
+                imgw = float(img.size[0])
+                imgh = float(img.size[1])
+                imgw_crop = imgw - params.splitmargin
+                imgw_half = math.floor(imgw/2)
+                img1 = img.crop((imgw_half, 0, imgw_crop, imgh))
+                img2 = img.crop((params.splitmargin, 0, imgw_half, imgh))
                 of = os.path.basename(f)
                 of = os.path.splitext(of)[0]
                 of1 = os.path.join(self.tmpdir, of + '_1.jpg')
@@ -157,6 +169,7 @@ class Images:
                 img2.save(of2, quality=95)
                 self.conv_imgs.append(of2)
                 self.imgs.append(of2)
+                print(of1, of2)
             elif img.format != 'JPG':
                 if img.mode != 'RGB':
                     img = img.convert('RGB')
@@ -168,8 +181,8 @@ class Images:
                 self.imgs.append(of)
             else:
                 self.imgs.append(f)
-        if len(self.imgs) > 0:
-            self.imgs.sort(key=lambda f: int(re.match('[^\d]*(\d+)[^\d]*', os.path.basename(f)).group(1)))
+        #if len(self.imgs) > 0:
+        #    self.imgs.sort(key=filesortkey)
 
 class Parameters:
     def __init__(self, initargs=None):
@@ -182,7 +195,7 @@ class Parameters:
         parser.add_argument('-s', '--suffix', help='suffix of output file name with recursive mode', default=' 第{:02d}巻')
         parser.add_argument('-t', '--tmpdir', help='temporary directory', metavar='DIR', default=None)
         parser.add_argument('--split', help='split image to 2 pages', action='store_true')
-        parser.add_argument('--splitmargin', help='crop margin at left/right side to split image in pixel', default=0)
+        parser.add_argument('--splitmargin', help='crop margin at left/right side to split image in pixel', type=int, default=0)
         parser.add_argument('--splitpage', help='pages to be split', default=None) # format, '1-, 4-7'
         #parser.add_argument('--merge', help='merge 2 img into single page', default=0)
         #parser.add_argument('--mergepage', help='pages to be merged', default=None) # format, '1-, 4-7'
@@ -261,7 +274,7 @@ class guiMain(tk.Frame):
         self.params.recursive = self.recursive_check.entry.get()
         self.params.suffix = self.suffix_textbox.entry.get()
         self.params.split = self.split_check.entry.get()
-        self.params.splitmargin = self.splitmargin_textbox.entry.get()
+        self.params.splitmargin = int(self.splitmargin_textbox.entry.get())
         self.params.splitpage = self.splitpages_textbox.entry.get()
         convert(params)
 
@@ -283,7 +296,8 @@ class guiDirDiag(tk.Frame):
         box.pack(side=tk.LEFT)
         button.pack(side=tk.LEFT)
     def dirdialog_clicked(self):
-        initdir = os.path.abspath(os.path.dirname(self.entry.get()))
+        #initdir = os.path.abspath(os.path.dirname(self.entry.get()))
+        initdir = os.path.abspath(self.entry.get())
         dir = tkf.askdirectory(initialdir = initdir)
         if dir is not None:
             self.entry.set(dir)
@@ -328,6 +342,8 @@ class guiRadioButton(tk.Frame):
 
 if __name__ == '__main__':
     params = Parameters()
+    for p in vars(params):
+        print(p, type(getattr(params, p)))
     if params.nogui:
         convert(params)
     else:
