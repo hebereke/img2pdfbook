@@ -71,7 +71,7 @@ def convert(params):
         img_folders = get_img_folders(params.img_folder)
     else:
         img_folders = [params.img_folder]
-    index = 1
+    index = params.initcount
     for d in img_folders:
         imgs = Images(d, params)
         output_pdf = output(params.output_pdf, params.output_dir, params.img_folder)
@@ -170,12 +170,24 @@ class Images:
                 self.conv_imgs.append(of2)
                 self.imgs.append(of2)
                 print('split {} to {} and {}'.format(f, of1, of2))
+            elif self.params.margin != 0:
+                if img.mode != 'RGB':
+                    img = img.convert('RGB')
+                imgw = float(img.size[0])
+                imgh = float(img.size[1])
+                of = os.path.basename(f)
+                of = os.path.splitext(of)[0]
+                of = os.path.join(self.tmpdir, of + '_crop.jpg')
+                img1 = img.crop((self.params.margin, 0, imgw - self.params.margin, imgh))
+                img1.save(of, quality=95)
+                self.conv_imgs.append(of)
+                self.imgs.append(of)
             elif img.format != 'JPEG':
                 if img.mode != 'RGB':
                     img = img.convert('RGB')
                 of = os.path.basename(f)
                 of = os.path.splitext(of)[0]
-                of = os.path.join(self.tmpdir, of + '.jpg')
+                of = os.path.join(self.tmpdir, of + '_conv.jpg')
                 img.save(of, quality=95)
                 print('convert {} to {}'.format(f, of))
                 self.conv_imgs.append(of)
@@ -192,7 +204,9 @@ class Parameters:
         parser.add_argument('--nogui', help='start with CUI', action='store_true')
         parser.add_argument('-r', '--recursive', help='recursive mode', action='store_true')
         parser.add_argument('-s', '--suffix', help='suffix of output file name with recursive mode', default=' 第{:02d}巻')
+        parser.add_argument('-i', '--initcount', help='initial count in suffix', default=1)
         parser.add_argument('-t', '--tmpdir', help='temporary directory', metavar='DIR', default=None)
+        parser.add_argument('-m', '--margin', help='crop margin at left/right side in pixel', type=int, default=0)
         parser.add_argument('--split', help='split image to 2 pages', action='store_true')
         parser.add_argument('--splitmargin', help='crop margin at left/right side to split image in pixel', type=int, default=0)
         parser.add_argument('--splitpage', help='pages to be split', default=None) # format, '1-, 4-7'
@@ -222,7 +236,7 @@ class guiMain(tk.Frame):
     def __init__(self, master=None, params=None):
         super().__init__()
         self.master.title(u'img2pdfbook')
-        self.master.geometry('550x250')
+        self.master.geometry('600x300')
         if params is None:
             self.params = Parameters()
         else:
@@ -238,18 +252,25 @@ class guiMain(tk.Frame):
         self.outfolder_dirdiag.pack(anchor=tk.W)
         self.outputpdf_textbox.pack(anchor=tk.W)
 
+        frame_crop = tk.Frame(master=self)
+        self.crop_textbox = guiTextEntry(master=frame_crop, label=u'左右切り取りマージン', boxwidth=10, inittext=self.params.margin)
+        self.crop_textbox.grid(row=0, column=0, sticky=tk.W)
+        frame_crop.pack(anchor=tk.W)
+
         frame_recursive = tk.Frame(master=self)
         self.suffix_textbox = guiTextEntry(master=frame_recursive, label=u'添字', boxwidth=10, inittext=self.params.suffix)
+        self.initcount_textbox = guiTextEntry(master=frame_recursive, label=u'始めの数字', boxwidth=5, inittext=self.params.initcount)
         self.recursive_check = guiRadioButton(master=frame_recursive, label=u'入力フォルダ以下の各フォルダで変換', initcond=self.params.recursive,
             slave_widget=None)
         self.suffix_textbox.grid(row=0, column=1)
+        self.initcount_textbox.grid(row=0, column=2)
         self.recursive_check.grid(row=0, column=0, sticky=tk.W)
         frame_recursive.pack(anchor=tk.W)
 
         frame_split = tk.Frame(master=self)
         frame_split_textbox = tk.Frame(master=frame_split)
         self.splitpages_textbox = guiTextEntry(master=frame_split_textbox, label=u'分割するページ', boxwidth=5, inittext=self.params.splitpage or '')
-        self.splitmargin_textbox = guiTextEntry(master=frame_split_textbox, label=u'分割する際の左右マージン', boxwidth=2, inittext=self.params.splitmargin)
+        self.splitmargin_textbox = guiTextEntry(master=frame_split_textbox, label=u'分割する際の左右マージン', boxwidth=5, inittext=self.params.splitmargin)
         self.splitpages_textbox.grid(row=0, column=0)
         self.splitmargin_textbox.grid(row=0, column=1)
         self.split_check = guiRadioButton(master=frame_split, label=u'ページを分割', initcond=self.params.split,
@@ -273,6 +294,8 @@ class guiMain(tk.Frame):
         self.params.split = self.split_check.entry.get()
         self.params.splitmargin = int(self.splitmargin_textbox.entry.get())
         self.params.splitpage = self.splitpages_textbox.entry.get()
+        self.params.margin = int(self.crop_textbox.entry.get())
+        self.params.initcount = int(self.initcount_textbox.entry.get())
         convert(params)
 
 class guiDirDiag(tk.Frame):
