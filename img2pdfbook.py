@@ -86,7 +86,7 @@ def convert(params):
             print(d, imgs.imgs, out_pdf)
         if len(imgs.imgs) > 0:
             jpg2pdf(imgs.imgs, out_pdf)
-        if len(imgs.conv_imgs) > 0:
+        if len(imgs.conv_imgs) > 0 and not params.leave_temp:
             for f in imgs.conv_imgs:
                 os.remove(f)
 
@@ -212,6 +212,7 @@ class Parameters:
         parser.add_argument('--splitpage', help='pages to be split', default=None) # format, '1-, 4-7'
         #parser.add_argument('--merge', help='merge 2 img into single page', default=0)
         #parser.add_argument('--mergepage', help='pages to be merged', default=None) # format, '1-, 4-7'
+        parser.add_argument('--leave_temp', help='leave temp files', action='store_true')
         parser.add_argument('--debug', help='debug mode', action='store_true')
         args = parser.parse_args(initargs)
         for arg in vars(args):
