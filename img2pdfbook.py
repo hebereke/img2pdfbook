@@ -276,8 +276,11 @@ class guiMain(tk.Frame):
         self.splitmargin_textbox.grid(row=0, column=1)
         self.split_check = guiRadioButton(master=frame_split, label=u'ページを分割', initcond=self.params.split,
             slave_widget=None)
-        frame_split_textbox.grid(row=0, column=1)
+        self.leave_temp = guiRadioButton(master=frame_split, label=u'分割画像の保存', initcond=self.params.leave_temp,
+            slave_widget=None)
+        frame_split_textbox.grid(row=0, column=2)
         self.split_check.grid(row=0, column=0, sticky=tk.W)
+        self.leave_temp.grid(row=0, column=1, sticky=tk.W)
         frame_split.pack(anchor=tk.W)
 
         frame_bottom = tk.Frame(master=self)
@@ -293,6 +296,7 @@ class guiMain(tk.Frame):
         self.params.recursive = self.recursive_check.entry.get()
         self.params.suffix = self.suffix_textbox.entry.get()
         self.params.split = self.split_check.entry.get()
+        self.params.leave_temp = self.leave_temp.entry.get()
         self.params.splitmargin = int(self.splitmargin_textbox.entry.get())
         self.params.splitpage = self.splitpages_textbox.entry.get()
         self.params.margin = int(self.crop_textbox.entry.get())
