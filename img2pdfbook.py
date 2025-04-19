@@ -87,9 +87,8 @@ def convert(params):
             print(d, imgs.imgs, out_pdf)
         if len(imgs.imgs) > 0:
             jpg2pdf(imgs.imgs, out_pdf)
-        if len(imgs.conv_imgs) > 0 and not params.leave_temp:
-            for f in imgs.conv_imgs:
-                os.remove(f)
+        if not params.leave_temp:
+            shutil.rmtree(params.tmpdir)
 
 class Images:
     def __init__(self, folder=None, params=None):
