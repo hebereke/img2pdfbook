@@ -98,14 +98,15 @@ class Images:
             raise Exception('invalid folder: {}'.format(self.folder))
         if self.params.tmpdir is None:
             #self.tmpdir = self.params.output_dir
-            self.tmpdir = os.path.join(self.folder, 'tmp_{}'.format(os.path.basename(__file__)))
+            tmpdir_name = os.path.splitext(os.path.basename(__file__))[0]
+            self.tmpdir = os.path.join(self.folder, f'tmp_{tmpdir_name}')
         else:
             self.tmpdir = self.params.tmpdir
         self.tmpdir = os.path.abspath(self.tmpdir)
         if os.path.isdir(self.tmpdir):
             if len(os.listdir(self.tmpdir)) > 0:
                 shutil.rmtree(self.tmpdir)
-            os.path.mkdir(self.tmpdir)
+        os.mkdir(self.tmpdir)
         self.imgs = []
         self.conv_imgs = []
         self.makelist()
