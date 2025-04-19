@@ -9,6 +9,7 @@ import tkinter.filedialog as tkf
 import img2pdf
 from PIL import Image
 import natsort
+import shutil
 
 class LayoutProp:
     SIZE_MM ={
@@ -97,12 +98,15 @@ class Images:
         if not os.path.isdir(self.folder):
             raise Exception('invalid folder: {}'.format(self.folder))
         if self.params.tmpdir is None:
-            self.tmpdir = self.params.output_dir
+            #self.tmpdir = self.params.output_dir
+            self.tmpdir = os.path.join(self.folder, 'tmp_{}'.format(os.path.basename(__file__)))
         else:
             self.tmpdir = self.params.tmpdir
         self.tmpdir = os.path.abspath(self.tmpdir)
-        if not os.path.isdir(self.tmpdir):
-            raise Exception('invalid tmpdir: {}'.format(self.tmpdir))
+        if os.path.isdir(self.tmpdir):
+            if len(os.listdir(self.tmpdir)) > 0:
+                shutil.rmtree(self.tmpdir)
+            os.path.mkdir(self.tmpdir)
         self.imgs = []
         self.conv_imgs = []
         self.makelist()
@@ -193,7 +197,8 @@ class Images:
                 self.conv_imgs.append(of)
                 self.imgs.append(of)
             else:
-                self.imgs.append(f)
+                of = shutil.copy(f, self.tmpdir)
+                self.imgs.append(of)
 
 class Parameters:
     def __init__(self, initargs=None):
