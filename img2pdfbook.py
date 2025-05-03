@@ -21,11 +21,11 @@ class LayoutProp:
     }
     def __init__(self, size='B5', pixel=96):
         try:
-            self.size = SIZE_MM[size]
+            self.size = self.SIZE_MM[size]
         except KeyError:
             print('Does not support {}. Use B5 instead of.')
             print('Support page size are {}'.format(size, ','.join(LayoutProp.SIZE_MM.keys())))
-            size = SIZE_MM['B5']
+            size = self.SIZE_MM['B5']
     def get_img2pdfFunc(self):
         pagesize=(img2pdf.mm_to_pt(self.size[0]), img2pdf.mm_to_pt(self.size[1]))
         return img2pdf.get_layout_fun(pagesize)
@@ -74,6 +74,14 @@ def convert(params):
         img_folders = [params.img_folder]
     index = params.initcount
     for d in img_folders:
+        if params.tmpdir is None:
+            tmpdir_name = os.path.splitext(os.path.basename(__file__))[0]
+            params.tmpdir = os.path.join(d, f'tmp_{tmpdir_name}')
+        params.tmpdir = os.path.abspath(params.tmpdir)
+        if os.path.isdir(params.tmpdir):
+            if len(os.listdir(params.tmpdir)) > 0:
+                shutil.rmtree(params.tmpdir)
+        os.mkdir(params.tmpdir)
         imgs = Images(d, params)
         output_pdf = output(params.output_pdf, params.output_dir, params.img_folder)
         if params.recursive:
@@ -96,17 +104,6 @@ class Images:
         self.params = params
         if not os.path.isdir(self.folder):
             raise Exception('invalid folder: {}'.format(self.folder))
-        if self.params.tmpdir is None:
-            #self.tmpdir = self.params.output_dir
-            tmpdir_name = os.path.splitext(os.path.basename(__file__))[0]
-            self.tmpdir = os.path.join(self.folder, f'tmp_{tmpdir_name}')
-        else:
-            self.tmpdir = self.params.tmpdir
-        self.tmpdir = os.path.abspath(self.tmpdir)
-        if os.path.isdir(self.tmpdir):
-            if len(os.listdir(self.tmpdir)) > 0:
-                shutil.rmtree(self.tmpdir)
-        os.mkdir(self.tmpdir)
         self.imgs = []
         self.conv_imgs = []
         self.makelist()
@@ -154,51 +151,44 @@ class Images:
         for i in range(len(files)):
             f = os.path.join(self.folder, files[i])
             img = Image.open(f)
-            if self.params.split and splitpages is not None and splitpages.count(i+1) > 0:
-                if img.mode != 'RGB':
-                    img = img.convert('RGB')
-                imgw = float(img.size[0])
-                imgh = float(img.size[1])
-                imgw_crop = imgw - self.params.splitmargin
-                imgw_half = math.floor(imgw/2)
-                img1 = img.crop((imgw_half, 0, imgw_crop, imgh))
-                img2 = img.crop((self.params.splitmargin, 0, imgw_half, imgh))
-                of = os.path.basename(f)
-                of = os.path.splitext(of)[0]
-                of1 = os.path.join(self.tmpdir, of + '_1.jpg')
-                img1.save(of1, quality=95)
-                self.conv_imgs.append(of1)
-                self.imgs.append(of1)
-                of2 = os.path.join(self.tmpdir, of + '_2.jpg')
-                img2.save(of2, quality=95)
-                self.conv_imgs.append(of2)
-                self.imgs.append(of2)
-                print('split {} to {} and {}'.format(f, of1, of2))
-            elif self.params.margin != 0:
-                if img.mode != 'RGB':
-                    img = img.convert('RGB')
-                imgw = float(img.size[0])
-                imgh = float(img.size[1])
-                of = os.path.basename(f)
-                of = os.path.splitext(of)[0]
-                of = os.path.join(self.tmpdir, of + '_crop.jpg')
-                img1 = img.crop((self.params.margin, 0, imgw - self.params.margin, imgh))
-                img1.save(of, quality=95)
-                self.conv_imgs.append(of)
-                self.imgs.append(of)
-            elif img.format != 'JPEG':
-                if img.mode != 'RGB':
-                    img = img.convert('RGB')
-                of = os.path.basename(f)
-                of = os.path.splitext(of)[0]
-                of = os.path.join(self.tmpdir, of + '_conv.jpg')
-                img.save(of, quality=95)
-                print('convert {} to {}'.format(f, of))
-                self.conv_imgs.append(of)
+            if ((img.format == 'JPEG') and
+                (not self.params.split or splitpages is None or splitpages.count(i+1) <= 0) and
+                (self.params.margin == 0)):
+                of = shutil.copy(f, self.params.tmpdir)
                 self.imgs.append(of)
             else:
-                of = shutil.copy(f, self.tmpdir)
-                self.imgs.append(of)
+                if img.mode != 'RGB':
+                    img = img.convert('RGB')
+                if self.params.margin != 0:
+                    imgw = float(img.size[0])
+                    imgh = float(img.size[1])
+                    img = img.crop((self.params.margin, 0, imgw - self.params.margin, imgh))
+                if self.params.split and splitpages is not None and splitpages.count(i+1) > 0:
+                    imgw = float(img.size[0])
+                    imgh = float(img.size[1])
+                    imgw_crop = imgw - self.params.splitmargin
+                    imgw_half = math.floor(imgw/2)
+                    img1 = img.crop((imgw_half, 0, imgw_crop, imgh))
+                    img2 = img.crop((self.params.splitmargin, 0, imgw_half, imgh))
+                    img = None
+                of = os.path.basename(f)
+                of = os.path.splitext(of)[0]
+                if img is not None:
+                    of = os.path.join(self.params.tmpdir, of + '_conv.jpg')
+                    img.save(of, quality=95)
+                    self.conv_imgs.append(of)
+                    self.imgs.append(of)
+                    print('convert {} to {}'.format(f, of))
+                else:
+                    of1 = os.path.join(self.params.tmpdir, of + '_1.jpg')
+                    img1.save(of1, quality=95)
+                    self.conv_imgs.append(of1)
+                    self.imgs.append(of1)
+                    of2 = os.path.join(self.params.tmpdir, of + '_2.jpg')
+                    img2.save(of2, quality=95)
+                    self.conv_imgs.append(of2)
+                    self.imgs.append(of2)
+                    print('split {} to {} and {}'.format(f, of1, of2))
 
 class Parameters:
     def __init__(self, initargs=None):
@@ -226,8 +216,8 @@ class Parameters:
             self.output_dir = self.img_folder
     def setOutput(self):
         if os.path.dirname(self.output_pdf) == '':
-            out_dir = img_folder
-            out_file = output_pdf
+            out_dir = self.img_folder
+            out_file = self.output_pdf
         else:
             output = os.path.split(self.output_pdf)
             out_dir = os.path.abspath(output[0])
@@ -242,7 +232,7 @@ class guiMain(tk.Frame):
     def __init__(self, master=None, params=None):
         super().__init__()
         self.master.title(u'img2pdfbook')
-        self.master.geometry('600x300')
+        self.master.geometry('650x300')
         if params is None:
             self.params = Parameters()
         else:
@@ -252,10 +242,14 @@ class guiMain(tk.Frame):
         self.pack()
     def create_widgets(self):
         self.imgfolder_dirdiag = guiDirDiag(master=self, label=u'入力フォルダ', initdir=self.params.img_folder)
-        self.outfolder_dirdiag = guiDirDiag(master=self, label=u'出力フォルダ', initdir=self.params.output_dir)
+        frame_output = tk.Frame(master=self)
+        self.outfolder_dirdiag = guiDirDiag(master=frame_output, label=u'出力フォルダ', initdir=self.params.output_dir)
+        self.outfolder_dirdiag.grid(row=0, column=0, sticky=tk.W)
+        # button_copyimgfolder = tk.Button(master=frame_output, text=u"入力フォルダのコピー", command=self.outfolder_dirdiag.copy_entry(self.imgfolder_dirdiag))
+        # button_copyimgfolder.grid(row=0, column=1, sticky=tk.W)
         self.outputpdf_textbox = guiTextEntry(master=self, label=u'出力ファイル名', inittext=self.params.output_pdf, boxwidth=40)
         self.imgfolder_dirdiag.pack(anchor=tk.W)
-        self.outfolder_dirdiag.pack(anchor=tk.W)
+        frame_output.pack(anchor=tk.W)
         self.outputpdf_textbox.pack(anchor=tk.W)
 
         frame_crop = tk.Frame(master=self)
@@ -264,35 +258,36 @@ class guiMain(tk.Frame):
         frame_crop.pack(anchor=tk.W)
 
         frame_recursive = tk.Frame(master=self)
-        self.suffix_textbox = guiTextEntry(master=frame_recursive, label=u'添字', boxwidth=10, inittext=self.params.suffix)
-        self.initcount_textbox = guiTextEntry(master=frame_recursive, label=u'始めの数字', boxwidth=5, inittext=self.params.initcount)
         self.recursive_check = guiRadioButton(master=frame_recursive, label=u'入力フォルダ以下の各フォルダで変換', initcond=self.params.recursive,
             slave_widget=None)
+        self.suffix_textbox = guiTextEntry(master=frame_recursive, label=u'添字', boxwidth=10, inittext=self.params.suffix)
+        self.initcount_textbox = guiTextEntry(master=frame_recursive, label=u'始めの数字', boxwidth=5, inittext=self.params.initcount)
+        self.recursive_check.grid(row=0, column=0, sticky=tk.W)
         self.suffix_textbox.grid(row=0, column=1)
         self.initcount_textbox.grid(row=0, column=2)
-        self.recursive_check.grid(row=0, column=0, sticky=tk.W)
         frame_recursive.pack(anchor=tk.W)
 
         frame_split = tk.Frame(master=self)
-        frame_split_textbox = tk.Frame(master=frame_split)
-        self.splitpages_textbox = guiTextEntry(master=frame_split_textbox, label=u'分割するページ', boxwidth=5, inittext=self.params.splitpage or '')
-        self.splitmargin_textbox = guiTextEntry(master=frame_split_textbox, label=u'分割する際の左右マージン', boxwidth=5, inittext=self.params.splitmargin)
-        self.splitpages_textbox.grid(row=0, column=0)
-        self.splitmargin_textbox.grid(row=0, column=1)
         self.split_check = guiRadioButton(master=frame_split, label=u'ページを分割', initcond=self.params.split,
             slave_widget=None)
-        self.leave_temp = guiRadioButton(master=frame_split, label=u'分割画像の保存', initcond=self.params.leave_temp,
-            slave_widget=None)
-        frame_split_textbox.grid(row=0, column=2)
+        self.splitpages_textbox = guiTextEntry(master=frame_split, label=u'分割するページ', boxwidth=5, inittext=self.params.splitpage or '')
+        self.splitmargin_textbox = guiTextEntry(master=frame_split, label=u'分割する際の中央マージン', boxwidth=5, inittext=self.params.splitmargin)
         self.split_check.grid(row=0, column=0, sticky=tk.W)
-        self.leave_temp.grid(row=0, column=1, sticky=tk.W)
+        self.splitpages_textbox.grid(row=0, column=1)
+        self.splitmargin_textbox.grid(row=0, column=2)
         frame_split.pack(anchor=tk.W)
 
+        frame_keep = tk.Frame(master=self)
+        self.leave_temp = guiRadioButton(master=frame_keep, label=u'一時画像の保存', initcond=self.params.leave_temp,
+            slave_widget=None)
+        self.leave_temp.grid(row=0, column=0, sticky=tk.W)
+        frame_keep.pack(anchor=tk.W)
+
         frame_bottom = tk.Frame(master=self)
-        button1 = tk.Button(master=frame_bottom, text="実行", command=self.convert)
-        button2 = tk.Button(master=frame_bottom, text=("閉じる"), command=quit)
-        button1.grid(row=0, column=0)
-        button2.grid(row=0, column=1)
+        button_exec = tk.Button(master=frame_bottom, text="実行", command=self.convert)
+        button_close = tk.Button(master=frame_bottom, text=("閉じる"), command=quit)
+        button_exec.grid(row=0, column=0)
+        button_close.grid(row=0, column=1)
         frame_bottom.pack()
     def convert(self):
         self.params.img_folder = self.imgfolder_dirdiag.entry.get()
@@ -331,6 +326,10 @@ class guiDirDiag(tk.Frame):
         dir = tkf.askdirectory(initialdir = initdir)
         if dir is not None:
             self.entry.set(dir)
+    def copy_entry(self, guimodule):
+        self.entry.set(guimodule.entry.get())
+        print(guimodule.entry.get())
+        self.entry.get()
 
 class guiTextEntry(tk.Frame):
     def __init__(self, master=None, label=None, inittext=None, boxwidth=30):
