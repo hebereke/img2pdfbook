@@ -168,8 +168,10 @@ class Images:
                     imgh = float(img.size[1])
                     imgw_crop = imgw - self.params.splitmargin
                     imgw_half = math.floor(imgw/2)
-                    img1 = img.crop((imgw_half, 0, imgw_crop, imgh))
-                    img2 = img.crop((self.params.splitmargin, 0, imgw_half, imgh))
+                    # img1 = img.crop((imgw_half, 0, imgw_crop, imgh))
+                    # img2 = img.crop((self.params.splitmargin, 0, imgw_half, imgh))
+                    img1 = img.crop((imgw_half+self.params.splitmargin/2,0,imgw,imgh))
+                    img2 = img.crop((0,0,imgw_half-self.params.splitmargin/2,imgh))
                     img = None
                 of = os.path.basename(f)
                 of = os.path.splitext(of)[0]
@@ -203,7 +205,7 @@ class Parameters:
         parser.add_argument('-t', '--tmpdir', help='temporary directory', metavar='DIR', default=None)
         parser.add_argument('-m', '--margin', help='crop margin at left/right side in pixel', type=int, default=0)
         parser.add_argument('--split', help='split image to 2 pages', action='store_true')
-        parser.add_argument('--splitmargin', help='crop margin at left/right side to split image in pixel', type=int, default=0)
+        parser.add_argument('--splitmargin', help='crop margin at center for image to be split in pixel', type=int, default=0)
         parser.add_argument('--splitpage', help='pages to be split', default=None) # format, '1-, 4-7'
         #parser.add_argument('--merge', help='merge 2 img into single page', default=0)
         #parser.add_argument('--mergepage', help='pages to be merged', default=None) # format, '1-, 4-7'
@@ -232,7 +234,7 @@ class guiMain(tk.Frame):
     def __init__(self, master=None, params=None):
         super().__init__()
         self.master.title(u'img2pdfbook')
-        self.master.geometry('650x300')
+        self.master.geometry('700x350')
         if params is None:
             self.params = Parameters()
         else:
