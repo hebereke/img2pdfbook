@@ -74,14 +74,16 @@ def convert(params):
         img_folders = [params.img_folder]
     index = params.initcount
     for d in img_folders:
-        if params.tmpdir is None:
+        tmpdir = params.tmpdir
+        if tmpdir is None:
             tmpdir_name = os.path.splitext(os.path.basename(__file__))[0]
-            params.tmpdir = os.path.join(d, f'tmp_{tmpdir_name}')
-        params.tmpdir = os.path.abspath(params.tmpdir)
-        if os.path.isdir(params.tmpdir):
-            if len(os.listdir(params.tmpdir)) > 0:
-                shutil.rmtree(params.tmpdir)
-        os.mkdir(params.tmpdir)
+            tmpdir = os.path.join(d, f'tmp_{tmpdir_name}')
+        tmpdir = os.path.abspath(tmpdir)
+        params.tmpdir = tmpdir
+        if os.path.isdir(tmpdir):
+            if len(os.listdir(tmpdir)) > 0:
+                shutil.rmtree(tmpdir)
+        os.mkdir(tmpdir)
         imgs = Images(d, params)
         output_pdf = output(params.output_pdf, params.output_dir, params.img_folder)
         if params.recursive:
@@ -96,7 +98,7 @@ def convert(params):
         if len(imgs.imgs) > 0:
             jpg2pdf(imgs.imgs, out_pdf)
         if not params.leave_temp:
-            shutil.rmtree(params.tmpdir)
+            shutil.rmtree(tmpdir)
 
 class Images:
     def __init__(self, folder=None, params=None):
