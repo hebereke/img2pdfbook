@@ -200,7 +200,7 @@ class Parameters:
         parser.add_argument('img_folder', help='folder of input images', nargs='?', default='.')
         parser.add_argument('-o', '--output_pdf', help='output file name', metavar='FILE', default='output')
         parser.add_argument('-d', '--output_dir', help='output directory', default=None, metavar='DIR')
-        parser.add_argument('--nogui', help='start with CUI', action='store_true')
+        parser.add_argument('--nogui', help='start without CUI', action='store_true')
         parser.add_argument('-r', '--recursive', help='recursive mode', action='store_true')
         parser.add_argument('-s', '--suffix', help='suffix of output file name with recursive mode', default=' 第{:02d}巻')
         parser.add_argument('-i', '--initcount', help='initial count in suffix', default=1)
