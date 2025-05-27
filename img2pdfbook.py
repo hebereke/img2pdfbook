@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 import os
+import sys
 import re
 import math
 import argparse
@@ -19,19 +20,23 @@ class LayoutProp:
         'B5' : (182, 257),
         'A4' : (210, 297),
     }
-    def __init__(self, size='B5', pixel=96):
+    def __init__(self, size='B5'):
         try:
             self.size = self.SIZE_MM[size]
         except KeyError:
-            print('Does not support {}. Use B5 instead of.')
-            print('Support page size are {}'.format(size, ','.join(LayoutProp.SIZE_MM.keys())))
-            size = self.SIZE_MM['B5']
+            print('Does not support {}. Use B5 instead.'.format(size))
+            print('Support page size are {}'.format(','.join(LayoutProp.SIZE_MM.keys())))
+            self.size = self.SIZE_MM['B5']
     def get_img2pdfFunc(self):
         pagesize=(img2pdf.mm_to_pt(self.size[0]), img2pdf.mm_to_pt(self.size[1]))
         return img2pdf.get_layout_fun(pagesize)
 
 def filesortkey(f):
-    return int(re.match('.*[^\d]*(\d+)[^\d]*$', os.path.basename(f)).group(1))
+    m = re.match('.*[^\d]*(\d+)[^\d]*$', os.path.basename(f))
+    if m:
+        return int(m.group(1))
+    else:
+        return 0
 
 def jpg2pdf(imgs, outpdf, size=None):
     with open(outpdf, 'wb') as f:
@@ -111,28 +116,28 @@ class Images:
         self.makelist()
     @staticmethod
     def str2list(strings, max):
-        list = []
+        outlist = []
         for token in strings.split(','):
             token = token.strip()
             m1 = re.match('^\d+$', token)
             m2 = re.match('^(\d+)\-(\d+)$', token)
             m3 = re.match('^(\d+)\-$', token)
             if m1:
-                list.append(int(token))
+                outlist.append(int(token))
             elif m2:
                 s = int(m2.group(1))
                 e = int(m2.group(2))
                 if s>e:
                     raise ValueError('invalid range: {}'.format(token))
                 elif s==e:
-                    list.append(s)
+                    outlist.append(s)
                 else:
-                    list += [i for i in range(s,e+1)]
+                    outlist += [i for i in range(s,e+1)]
             elif m3:
-                list += [i for i in range(int(m3.group(1)),int(max)+1)]
+                outlist += [i for i in range(int(m3.group(1)),int(max)+1)]
             else:
-                list = [i for i in range(1,int(max)+1)]
-        return list
+                outlist = [i for i in range(1,int(max)+1)]
+        return outlist
     @staticmethod
     def check_imgfile(f):
         try:
@@ -203,7 +208,7 @@ class Parameters:
         parser.add_argument('--nogui', help='start without CUI', action='store_true')
         parser.add_argument('-r', '--recursive', help='recursive mode', action='store_true')
         parser.add_argument('-s', '--suffix', help='suffix of output file name with recursive mode', default=' 第{:02d}巻')
-        parser.add_argument('-i', '--initcount', help='initial count in suffix', default=1)
+        parser.add_argument('-i', '--initcount', help='initial count in suffix', type=int, default=1)
         parser.add_argument('-t', '--tmpdir', help='temporary directory', metavar='DIR', default=None)
         parser.add_argument('-m', '--margin', help='crop margin at left/right side in pixel', type=int, default=0)
         parser.add_argument('--split', help='split image to 2 pages', action='store_true')
@@ -289,10 +294,16 @@ class guiMain(tk.Frame):
 
         frame_bottom = tk.Frame(master=self)
         button_exec = tk.Button(master=frame_bottom, text="実行", command=self.convert)
-        button_close = tk.Button(master=frame_bottom, text=("閉じる"), command=quit)
+        button_close = tk.Button(master=frame_bottom, text=("閉じる"), command=sys.exit())
         button_exec.grid(row=0, column=0)
         button_close.grid(row=0, column=1)
         frame_bottom.pack()
+    @staticmethod
+    def intenter(v):
+        try:
+            return int(v)
+        except:
+            print('invalid value as int: {}'.format(v))
     def convert(self):
         self.params.img_folder = self.imgfolder_dirdiag.entry.get()
         self.params.output_dir = self.outfolder_dirdiag.entry.get()
@@ -301,10 +312,10 @@ class guiMain(tk.Frame):
         self.params.suffix = self.suffix_textbox.entry.get()
         self.params.split = self.split_check.entry.get()
         self.params.leave_temp = self.leave_temp.entry.get()
-        self.params.splitmargin = int(self.splitmargin_textbox.entry.get())
+        self.params.splitmargin = self.intenter(self.splitmargin_textbox.entry.get())
         self.params.splitpage = self.splitpages_textbox.entry.get()
-        self.params.margin = int(self.crop_textbox.entry.get())
-        self.params.initcount = int(self.initcount_textbox.entry.get())
+        self.params.margin = self.intenter(self.crop_textbox.entry.get())
+        self.params.initcount = self.intenter(self.initcount_textbox.entry.get())
         convert(params)
 
 class guiDirDiag(tk.Frame):
